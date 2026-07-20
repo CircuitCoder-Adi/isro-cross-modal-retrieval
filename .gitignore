@@ -1,0 +1,13 @@
+venv/
+.vscode/
+__pycache__/
+*.pyc
+
+final_model.pth
+
+*.npy
+*.index
+*.pkl
+
+datasets/
+.ipynb_checkpoints/

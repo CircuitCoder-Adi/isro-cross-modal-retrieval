@@ -1,0 +1,100 @@
+import os
+
+os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
+import sys
+from pathlib import Path
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+sys.path.append(str(PROJECT_ROOT))
+
+import faiss
+import pickle
+import numpy as np
+import pandas as pd
+import torch
+
+from src.models.encoder import CrossModalModel
+from src.datasets.dataset import CrossModalDataset
+from src.datasets.transforms import train_transform
+
+# Device
+device = torch.device(
+    "cuda" if torch.cuda.is_available() else "cpu"
+)
+
+# Model
+model = CrossModalModel(
+    embedding_dim=256
+)
+
+model.load_state_dict(
+    torch.load(
+        "final_model.pth",
+        map_location=device
+    )
+)
+
+model = model.to(device)
+model.eval()
+
+print("Model Loaded")
+
+# Dataset
+dataset = CrossModalDataset(
+    "test.csv",
+    transform=train_transform
+)
+
+# Load FAISS Index
+index = faiss.read_index(
+    "optical.index"
+)
+
+print("FAISS Loaded")
+
+# Load Optical Paths
+with open(
+    "optical_paths.pkl",
+    "rb"
+) as f:
+    optical_paths = pickle.load(f)
+
+print("Paths Loaded")
+
+# Query Image
+query_idx = 0
+
+sar_img, optical_img, sar_path, optical_path = dataset[query_idx]
+
+sar_img = sar_img.unsqueeze(0).to(device)
+
+# Generate SAR Embedding
+with torch.no_grad():
+
+    query_embedding = model.sar_encoder(
+        sar_img
+    )
+
+query_embedding = (
+    query_embedding
+    .cpu()
+    .numpy()
+    .astype("float32")
+)
+
+# Top-5 Search
+distances, indices = index.search(
+    query_embedding,
+    5
+)
+
+print("\nQUERY SAR IMAGE:")
+print(sar_path)
+
+print("\nTOP 5 MATCHES:\n")
+
+for rank, idx in enumerate(indices[0], start=1):
+
+    print(
+        f"{rank}. {optical_paths[idx]}"
+    )
